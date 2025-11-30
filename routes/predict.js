@@ -1,52 +1,34 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import requests
-import base64
-from PIL import Image
-import io
+import express from 'express';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
+import axios from 'axios';
+import FormData from 'form-data';
 
-app = Flask(__name__)
-CORS(app)
+const router = express.Router();
+const upload = multer({ dest: 'uploads/' });
 
-# -------------------- HF Space Model URL --------------------
-# Your Hugging Face Space endpoint for prediction
-HF_SPACE_URL = "https://hf.space/embed/Parkavi0987/Agriml/+/api/predict/"
+router.post('/', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-# -------------------- ROUTE --------------------
-@app.route("/api/predict", methods=["POST"])
-def predict():
-    try:
-        if "file" not in request.files:
-            return jsonify({"error": "No image provided"}), 400
+  const filePath = path.resolve(req.file.path);
+  const form = new FormData();
+  form.append('file', fs.createReadStream(filePath));
 
-        file = request.files["file"]
+  try {
+    const response = await axios.post(
+      'https://hf.space/embed/Parkavi0987/Agriml/+/api/predict/',
+      form,
+      { headers: form.getHeaders() }
+    );
 
-        # Convert uploaded image to base64 for HF Space API
-        img_bytes = file.read()
-        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+    fs.unlink(filePath, () => {});
+    res.json(response.data);
+  } catch (err) {
+    fs.unlink(filePath, () => {});
+    console.error(err);
+    res.status(500).json({ error: 'Prediction failed', details: err.message });
+  }
+});
 
-        # Send request to Hugging Face Space
-        payload = {"data": [img_b64]}
-        response = requests.post(HF_SPACE_URL, json=payload)
-
-        if response.status_code != 200:
-            return jsonify({
-                "error": "ML model API failed",
-                "details": response.text
-            }), 500
-
-        # Return HF prediction to frontend
-        hf_result = response.json()
-        return jsonify({
-            "prediction": hf_result.get("data", [])
-        })
-
-    except Exception as e:
-        return jsonify({
-            "error": "Prediction failed",
-            "details": str(e)
-        }), 500
-
-# -------------------- RUN SERVER --------------------
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+export default router;
