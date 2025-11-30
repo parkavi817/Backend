@@ -2,74 +2,63 @@ import express from "express";
 import multer from "multer";
 import fs from "fs";
 import fetch from "node-fetch";
+import FormData from "form-data";
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
-// Use the more specific /api/predict endpoint for modern Gradio Spaces
-const API_URL = "https://parkavi0987-agriml.hf.space/api/predict";
+const API_BASE = "https://parkavi0987-agriml.hf.space";
 
 router.post("/", upload.single("file"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
-
   try {
-    // Read the file and convert it to a base64 data URL
-    const buffer = fs.readFileSync(req.file.path);
-    const base64Image = buffer.toString("base64");
-    const mimeType = req.file.mimetype;
-    const dataUrl = `data:${mimeType};base64,${base64Image}`;
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
 
-    // Construct the payload exactly as the Gradio UI does
-    // Check the Payload tab in your browser's dev tools to confirm the structure
+    // STEP 1: upload the file to HuggingFace Space
+    const form = new FormData();
+    form.append("file", fs.createReadStream(req.file.path));
+
+    const uploadResp = await fetch(`${API_BASE}/file=upload`, {
+      method: "POST",
+      body: form,
+    });
+
+    const uploadJson = await uploadResp.json();
+    console.log("Upload response:", uploadJson);
+
+    const uploadedPath = uploadJson.file.path;
+
+    // STEP 2: call the predict endpoint using the uploaded path
     const payload = {
-      data: [
-        {
-          data: dataUrl,
-          name: req.file.originalname,
-        },
-      ],
-      fn_index: 0, // This is often 0, but verify in the Request Payload from your browser
+      data: [{ path: uploadedPath }],
+      fn_index: 2,
+      session_hash: "eavwkd1eh3m",
+      trigger_id: 11
     };
 
-    console.log("Sending payload to API:", JSON.stringify(payload, null, 2));
-
-    const apiResponse = await fetch(API_URL, {
+    const predictResp = await fetch(`${API_BASE}/api/predict`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    if (!apiResponse.ok) {
-      const errorText = await apiResponse.text();
-      console.error("API Error Response:", errorText);
-      throw new Error(`API Error ${apiResponse.status}: ${errorText}`);
-    }
+    const result = await predictResp.json();
+    console.log("Prediction result:", result);
 
-    const result = await apiResponse.json();
-    console.log("API Success Response:", result);
-
-    // Clean up the temporary file
+    // cleanup local file
     fs.unlinkSync(req.file.path);
 
-    // The actual prediction is usually in result.data[0]
-    return res.json({ prediction: result.data[0] });
+    return res.json(result);
 
-  } catch (err) {
-    console.error("Prediction error:", err);
+  } catch (error) {
+    console.error("Prediction error:", error);
 
-    // Clean up the temporary file on error as well
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
 
-    return res.status(500).json({
-      error: "Prediction failed",
-      details: err.message,
-    });
+    res.status(500).json({ error: "Prediction failed", details: error.message });
   }
 });
 
