@@ -1,48 +1,52 @@
-import express from 'express';
-import multer from 'multer';
-import fs from 'fs';
-import path from 'path';
-import axios from 'axios';
-import FormData from 'form-data';
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import requests
+import base64
+from PIL import Image
+import io
 
-const router = express.Router();
-const upload = multer({ dest: 'uploads/' });
+app = Flask(__name__)
+CORS(app)
 
-// Forward the uploaded image to the Flask prediction service
-router.post('/', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
+# -------------------- HF Space Model URL --------------------
+# Your Hugging Face Space endpoint for prediction
+HF_SPACE_URL = "https://hf.space/embed/Parkavi0987/Agriml/+/api/predict/"
 
-    const filePath = path.resolve(req.file.path);
-    const form = new FormData();
-    form.append('file', fs.createReadStream(filePath));
+# -------------------- ROUTE --------------------
+@app.route("/api/predict", methods=["POST"])
+def predict():
+    try:
+        if "file" not in request.files:
+            return jsonify({"error": "No image provided"}), 400
 
-    // Load the ML model URL from the environment variable
-    const ML_API = process.env.ML_MODEL_API_URL;
+        file = request.files["file"]
 
-    if (!ML_API) {
-      return res.status(500).json({ error: "ML_MODEL_API_URL not configured" });
-    }
+        # Convert uploaded image to base64 for HF Space API
+        img_bytes = file.read()
+        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
 
-    const flaskResponse = await axios.post(ML_API, form, {
-      headers: form.getHeaders(),
-    });
+        # Send request to Hugging Face Space
+        payload = {"data": [img_b64]}
+        response = requests.post(HF_SPACE_URL, json=payload)
 
-    // Clean up the uploaded file
-    fs.unlink(filePath, () => {});
+        if response.status_code != 200:
+            return jsonify({
+                "error": "ML model API failed",
+                "details": response.text
+            }), 500
 
-    // Return the Flask prediction directly to the client
-    res.status(200).json(flaskResponse.data);
+        # Return HF prediction to frontend
+        hf_result = response.json()
+        return jsonify({
+            "prediction": hf_result.get("data", [])
+        })
 
-  } catch (error) {
-    console.error('Prediction error:', error.message);
-    res.status(500).json({
-      error: 'Failed to get prediction from ML model',
-      details: error.message,
-    });
-  }
-});
+    except Exception as e:
+        return jsonify({
+            "error": "Prediction failed",
+            "details": str(e)
+        }), 500
 
-export default router;
+# -------------------- RUN SERVER --------------------
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
