@@ -9,7 +9,7 @@ const upload = multer({ dest: 'uploads/' });
 
 let client;
 
-// Connect to Gradio Space once when the server starts
+// Connect to Gradio Space once
 (async () => {
   client = await Client.connect("Parkavi0987/Agriml");
 })();
@@ -20,13 +20,12 @@ router.post('/', upload.single('file'), async (req, res) => {
   const filePath = path.resolve(req.file.path);
 
   try {
-    // Read file as buffer
     const imageBuffer = fs.readFileSync(filePath);
+    const base64Image = `data:image/png;base64,${imageBuffer.toString('base64')}`;
 
-    // Call Gradio Space /predict endpoint
-    const result = await client.predict("/predict", { image: imageBuffer });
+    const result = await client.predict("/predict", { image: base64Image });
 
-    fs.unlink(filePath, () => {}); // clean up uploaded file
+    fs.unlink(filePath, () => {}); // cleanup
     res.json(result.data);
   } catch (err) {
     fs.unlink(filePath, () => {});
