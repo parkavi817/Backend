@@ -1,9 +1,7 @@
 import express from "express";
 import multer from "multer";
 import fs from "fs";
-import path from "path";
-import { Client } from "@gradio/client";
-import { File } from "buffer";    // ✅ FIX: File polyfill for Node.js
+import { Client, handle_file } from "@gradio/client";  // ✅ Add handle_file import
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
@@ -24,17 +22,13 @@ router.post("/", upload.single("file"), async (req, res) => {
 
   try {
     const buffer = fs.readFileSync(req.file.path);
+    
+    // ✅ Use handle_file for proper Gradio file handling
+    const fileRef = handle_file(buffer);
 
-    // ✅ Create real File object for Gradio
-    const file = new File(
-      [buffer],
-      req.file.originalname,
-      { type: req.file.mimetype }
-    );
-
-    // ✅ Correct Gradio input
+    // ✅ Pass file reference directly
     const result = await client.predict("/predict", {
-      image: file
+      image: fileRef  // Works for single image input
     });
 
     fs.unlinkSync(req.file.path);
@@ -51,3 +45,4 @@ router.post("/", upload.single("file"), async (req, res) => {
 });
 
 export default router;
+
