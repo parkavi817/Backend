@@ -2,8 +2,8 @@ import express from "express";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
-import { Blob } from "buffer";
 import { Client } from "@gradio/client";
+import { Blob } from "buffer";
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
@@ -21,22 +21,22 @@ router.post("/", upload.single("file"), async (req, res) => {
   const filePath = path.resolve(req.file.path);
 
   try {
-    const imageBuffer = fs.readFileSync(filePath);
+    const buffer = fs.readFileSync(filePath);
 
-    // Convert buffer → Blob (THIS is what Gradio expects)
-    const blob = new Blob([imageBuffer]);
+    // MUST send a Blob
+    const blob = new Blob([buffer], { type: req.file.mimetype });
 
-    // Send correct object
     const result = await client.predict("/predict", {
-      image: blob,
+      image: blob
     });
 
-    fs.unlink(filePath, () => {});
+    fs.unlinkSync(filePath);
+
     res.json(result.data);
-  } catch (err) {
-    fs.unlink(filePath, () => {});
-    console.error(err);
-    res.status(500).json({ error: "Prediction failed", details: err.message });
+  } catch (error) {
+    fs.unlinkSync(filePath);
+    console.error(error);
+    res.status(500).json({ error: "Prediction failed", details: error.message });
   }
 });
 
