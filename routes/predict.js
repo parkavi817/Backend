@@ -1,17 +1,13 @@
 import express from "express";
 import multer from "multer";
 import fs from "fs";
-import { Client, handle_file } from "@gradio/client";  // ✅ Add handle_file import
+import FormData from "form-data";  // npm install form-data
+import fetch from "node-fetch";    // npm install node-fetch
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
-let client;
-
-// Connect to Gradio Space
-(async () => {
-  client = await Client.connect("Parkavi0987/Agriml");
-})();
+const SPACE_URL = "https://parkavi0987-agriml.hf.space";  // Your Space URL
 
 router.post("/", upload.single("file"), async (req, res) => {
   console.log("REQ FILE:", req.file);
@@ -21,19 +17,28 @@ router.post("/", upload.single("file"), async (req, res) => {
   }
 
   try {
+    // Read file as buffer
     const buffer = fs.readFileSync(req.file.path);
     
-    // ✅ Use handle_file for proper Gradio file handling
-    const fileRef = handle_file(buffer);
+    // Create FormData with file
+    const form = new FormData();
+    form.append("data", buffer, req.file.originalname);
+    form.append("fn_index", "0");  // predict fn index (usually 0)
 
-    // ✅ Pass file reference directly
-    const result = await client.predict("/predict", {
-      image: fileRef  // Works for single image input
+    // Direct API call to Gradio Space
+    const apiResponse = await fetch(`${SPACE_URL}/api/predict/`, {
+      method: "POST",
+      body: form
     });
 
-    fs.unlinkSync(req.file.path);
+    if (!apiResponse.ok) {
+      throw new Error(`API error: ${apiResponse.status}`);
+    }
 
-    return res.json(result.data);
+    const result = await apiResponse.json();
+    
+    fs.unlinkSync(req.file.path);
+    return res.json(result.data);  // Exact same format as UI
 
   } catch (err) {
     console.error(err);
@@ -45,4 +50,3 @@ router.post("/", upload.single("file"), async (req, res) => {
 });
 
 export default router;
-
