@@ -1,7 +1,6 @@
 import express from "express";
 import multer from "multer";
 import fs from "fs";
-import FormData from "form-data";
 import fetch from "node-fetch";
 
 const router = express.Router();
@@ -18,24 +17,23 @@ router.post("/", upload.single("file"), async (req, res) => {
 
   try {
     const buffer = fs.readFileSync(req.file.path);
-    
-    // Create FormData with the correct structure for Gradio
-    const form = new FormData();
-    
-    // For Hugging Face Spaces, we need to send the file in the expected format
-    form.append("data", JSON.stringify([{
-      data: `data:${req.file.mimetype};base64,${buffer.toString("base64")}`,
-      name: req.file.originalname
-    }]));
-    
-    form.append("fn_index", "0");
+    const base64Image = buffer.toString("base64");
+    const mimeType = req.file.mimetype;
+
+    // Create the payload that Gradio expects
+    const payload = {
+      data: [
+        `data:${mimeType};base64,${base64Image}`
+      ],
+      fn_index: 0
+    };
 
     const apiResponse = await fetch(`${SPACE_URL}/run/predict`, {
       method: "POST",
       headers: {
-        ...form.getHeaders(),
+        "Content-Type": "application/json",
       },
-      body: form
+      body: JSON.stringify(payload)
     });
 
     if (!apiResponse.ok) {
@@ -45,15 +43,12 @@ router.post("/", upload.single("file"), async (req, res) => {
 
     const result = await apiResponse.json();
     
-    // Clean up uploaded file
     fs.unlinkSync(req.file.path);
-    
     return res.json(result.data);
 
   } catch (err) {
     console.error("Prediction error:", err);
     
-    // Clean up file on error too
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
