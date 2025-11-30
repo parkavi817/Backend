@@ -7,19 +7,19 @@ import FormData from "form-data";
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
-const API_BASE = "https://parkavi0987-agriml.hf.space";
+const API_BASE = "https://parkavi0987-agriml.hf.space"; // Your Gradio/Flask backend
 
 router.post("/", upload.single("file"), async (req, res) => {
   try {
-    if (!req.file) 
+    if (!req.file)
       return res.status(400).json({ error: "No file uploaded" });
 
     // Build multipart form
     const form = new FormData();
     form.append("file", fs.createReadStream(req.file.path), req.file.originalname);
-    // --------------^^^^ MUST MATCH FLASK ----------------
+    // must match the input name in your backend (Gradio/Flask expects 'file')
 
-    // Send directly to HF Space /predict endpoint
+    // Send to backend
     const hfResp = await fetch(`${API_BASE}/predict`, {
       method: "POST",
       body: form,
@@ -27,9 +27,10 @@ router.post("/", upload.single("file"), async (req, res) => {
     });
 
     const result = await hfResp.json();
-    console.log("HF Response:", result);
+    console.log("Prediction result:", result);
 
-    fs.unlinkSync(req.file.path); // cleanup
+    // Cleanup uploaded temp file
+    fs.unlinkSync(req.file.path);
 
     return res.json(result);
 
@@ -38,7 +39,7 @@ router.post("/", upload.single("file"), async (req, res) => {
     if (req.file && fs.existsSync(req.file.path))
       fs.unlinkSync(req.file.path);
 
-    res.status(500).json({ error: "Prediction failed", details: err.message });
+    return res.status(500).json({ error: "Prediction failed", details: err.message });
   }
 });
 
