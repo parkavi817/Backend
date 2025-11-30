@@ -1,13 +1,12 @@
 import express from "express";
 import multer from "multer";
 import fs from "fs";
-import FormData from "form-data";  // npm install form-data
-import fetch from "node-fetch";    // npm install node-fetch
+import { FormData, fileFrom } from "node:fs";  // Native Node 18+
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
-const SPACE_URL = "https://parkavi0987-agriml.hf.space";  // Your Space URL
+const SPACE_URL = "https://parkavi0987-agriml.hf.space";  // ✅ Correct format
 
 router.post("/", upload.single("file"), async (req, res) => {
   console.log("REQ FILE:", req.file);
@@ -17,28 +16,27 @@ router.post("/", upload.single("file"), async (req, res) => {
   }
 
   try {
-    // Read file as buffer
-    const buffer = fs.readFileSync(req.file.path);
+    // ✅ Native File from disk path
+    const file = await fileFrom(req.file.path, req.file.originalname);
     
-    // Create FormData with file
     const form = new FormData();
-    form.append("data", buffer, req.file.originalname);
-    form.append("fn_index", "0");  // predict fn index (usually 0)
+    form.append("data", file);
+    form.append("fn_index", "0");
 
-    // Direct API call to Gradio Space
-    const apiResponse = await fetch(`${SPACE_URL}/api/predict/`, {
+    const apiResponse = await fetch(`${SPACE_URL}/api/predict`, {
       method: "POST",
       body: form
     });
 
     if (!apiResponse.ok) {
-      throw new Error(`API error: ${apiResponse.status}`);
+      const errorText = await apiResponse.text();
+      throw new Error(`API ${apiResponse.status}: ${errorText}`);
     }
 
     const result = await apiResponse.json();
     
     fs.unlinkSync(req.file.path);
-    return res.json(result.data);  // Exact same format as UI
+    return res.json(result.data);
 
   } catch (err) {
     console.error(err);
