@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
 import farmsRoutes from './routes/farm.js';
 import predictRoutes from './routes/predict.js';
 import authRoutes from './routes/auth.js';
@@ -14,14 +15,13 @@ import settingsRoutes from './routes/settings.js';
 import alertsRoutes from './routes/alerts.js';
 import cropsRoutes from './routes/crops.js';
 import schemesRoutes from './routes/schemes.js';
-import translationRoutes from './routes/simpleTranslation.js'; // Simple translation route
+import translationRoutes from './routes/simpleTranslation.js';
 import weatherRoutes from './routes/weather.js';
 import chatRoutes from './routes/chat.js';
 import marketRoutes from './routes/market.js';
 import dashboardRoutes from './routes/dashboard.js';
-import agriscanRoutes from './routes/agriscan.js'; 
-import mapsRoutes from './routes/maps.js'; // Added maps route import
-// ... other route imports ...
+import agriscanRoutes from './routes/agriscan.js';
+import mapsRoutes from './routes/maps.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,7 +29,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Connect to MongoDB
-const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/krishi';
+const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/agri-db';
 mongoose
   .connect(mongoUri, {
     useNewUrlParser: true,
@@ -43,15 +43,18 @@ mongoose
 
 // Middleware
 app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 204
+  origin: [
+    "http://localhost:5173",         
+    "https://your-frontend.netlify.app"  // you will update this later
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
 }));
+
 app.use(express.json());
 
-// Serve static files (including translation JSONs)
+// Serve translation JSON files
 app.use('/locales', express.static(path.join(__dirname, '..', 'public', 'locales')));
 
 // API routes
@@ -61,30 +64,22 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/alerts', alertsRoutes);
 app.use('/api/crops', cropsRoutes);
 app.use('/api/schemes', schemesRoutes);
-app.use('/api/translate', translationRoutes); // Register new route
+app.use('/api/translate', translationRoutes);
 app.use('/api/weather', weatherRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/farms', farmsRoutes);
-app.use('/api/predict', predictRoutes); 
+app.use('/api/predict', predictRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/agriscan', agriscanRoutes);
-app.use('/api/maps', mapsRoutes); // Added maps route registration
+app.use('/api/maps', mapsRoutes);
 
-// ... other route registrations ...
-
-// Fallback for SPA (after API routes)
+// 404 for invalid API routes
 app.use('/api/*', (req, res) => {
   res.status(404).json({ message: 'API endpoint not found' });
-});
-
-// Fallback for SPA
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-
