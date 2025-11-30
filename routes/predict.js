@@ -9,34 +9,32 @@ const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
 let client;
-
 (async () => {
   client = await Client.connect("Parkavi0987/Agriml");
 })();
 
 router.post("/", upload.single("file"), async (req, res) => {
-  if (!req.file)
-    return res.status(400).json({ error: "No file uploaded" });
+  console.log("REQ FILE:", req.file);  // 👈 VERY IMPORTANT LOG
 
-  const filePath = path.resolve(req.file.path);
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
 
   try {
-    const buffer = fs.readFileSync(filePath);
-
-    // MUST send a Blob
+    const buffer = fs.readFileSync(req.file.path);
     const blob = new Blob([buffer], { type: req.file.mimetype });
 
-    const result = await client.predict("/predict", {
-      image: blob
+    const result = await client.predict("/predict", { image: blob });
+
+    fs.unlinkSync(req.file.path);
+
+    return res.json(result.data);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      error: "Prediction failed",
+      details: err.message,
     });
-
-    fs.unlinkSync(filePath);
-
-    res.json(result.data);
-  } catch (error) {
-    fs.unlinkSync(filePath);
-    console.error(error);
-    res.status(500).json({ error: "Prediction failed", details: error.message });
   }
 });
 
