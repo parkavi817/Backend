@@ -1,12 +1,13 @@
 import express from "express";
 import multer from "multer";
 import fs from "fs";
-import { FormData, fileFrom } from "node:fs";  // Native Node 18+
+import FormData from "form-data";  // npm install form-data
+import fetch from "node-fetch";    // npm install node-fetch
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
-const SPACE_URL = "https://parkavi0987-agriml.hf.space";  // ✅ Correct format
+const SPACE_URL = "https://parkavi0987-agriml.hf.space";  // ✅ Base URL only
 
 router.post("/", upload.single("file"), async (req, res) => {
   console.log("REQ FILE:", req.file);
@@ -16,14 +17,14 @@ router.post("/", upload.single("file"), async (req, res) => {
   }
 
   try {
-    // ✅ Native File from disk path
-    const file = await fileFrom(req.file.path, req.file.originalname);
+    const buffer = fs.readFileSync(req.file.path);
     
+    // ✅ Correct Gradio Space endpoint + FormData
     const form = new FormData();
-    form.append("data", file);
+    form.append("data", buffer, req.file.originalname);
     form.append("fn_index", "0");
 
-    const apiResponse = await fetch(`${SPACE_URL}/api/predict`, {
+    const apiResponse = await fetch(`${SPACE_URL}/run/predict`, {
       method: "POST",
       body: form
     });
@@ -41,7 +42,7 @@ router.post("/", upload.single("file"), async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({
-      error: "Prediction failed",
+      error: "Prediction failed", 
       details: err.message
     });
   }
